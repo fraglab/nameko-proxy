@@ -1,7 +1,7 @@
 from nameko.standalone.rpc import ClusterProxy, StandaloneProxyBase
 from nameko.containers import WorkerContext
 
-from .reply_listener import StandaloneReplyListener
+from .reply_listener import StandaloneReplyListener, THREADING_MODE
 
 __all__ = ['ClusterRpcProxy']
 
@@ -9,7 +9,7 @@ __all__ = ['ClusterRpcProxy']
 class _StandaloneProxyBase(StandaloneProxyBase):
 
     def __init__(self, config, context_data=None, timeout=None,
-                 async_mode="threading", worker_ctx_cls=WorkerContext,
+                 async_mode=THREADING_MODE, worker_ctx_cls=WorkerContext,
                  reply_listener_cls=StandaloneReplyListener):
         super().__init__(
             config, context_data, timeout, reply_listener_cls)
