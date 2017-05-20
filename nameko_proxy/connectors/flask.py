@@ -1,56 +1,60 @@
 from logging import getLogger
 
-from flask import g
+from flask import _app_ctx_stack as stack
+from nameko.containers import WorkerContext
 
 from nameko_proxy.rpc_proxy import ClusterRpcProxy
-from nameko_proxy.reply_listener import THREADING_MODE
 
 logger = getLogger()
 
 
 class FlaskNamekoProxy:
 
-    def __init__(self, app=None, context_data=None, worker_cls=None):
+    def __init__(self, app=None):
+        self.worker_cls = None
+        self.context_data = None
         self.config = None
-        if app:
-            self.init_app(app, context_data, worker_cls)
 
-    def init_app(self, app, async_mode=THREADING_MODE, context_data=None, worker_cls=None):
+        if app:
+            self.init_app(app)
+
+    def init_app(self, app, context_data=None, worker_cls=WorkerContext):
+        self.worker_cls = worker_cls
+        self.context_data = context_data
         self.config = {key[len('NAMEKO_'):]: val for key, val in app.config.items() if key.startswith('NAMEKO_')}
-        g._nameko_rpc_proxy = ClusterRpcProxy(
-            self.config,
-            async_mode=async_mode,
-            context_data=context_data,
-            timeout=self.nameko_rpc_timeout,
-            worker_ctx_cls=worker_cls,
-        )
+
         app.teardown_appcontext(self._teardown_nameko_connection)
 
-    @property
-    def nameko_rpc_timeout(self):
-        return self.config.get('RPC_TIMEOUT', None)
-
     def __getattr__(self, name):
-        return getattr(self.get_connection(), name)
+        return getattr(self.connection, name)
 
-    def get_connection(self):
-        connection = getattr(g, '_nameko_connection', None)
-        if not connection:
-            connection = self.get_proxy().start()
-            g._nameko_connection = connection
-        return connection
+    @property
+    def connection(self):
+        ctx = stack.top
+        if ctx is not None:
+            if not hasattr(ctx, 'nameko_connection'):
+                ctx.nameko_connection = self.proxy.start()
+        return ctx.nameko_connection
 
-    @staticmethod
-    def get_proxy():
-        return getattr(g, '_nameko_rpc_proxy', None)
+    @property
+    def proxy(self):
+        ctx = stack.top
+        if ctx is not None:
+            if not hasattr(ctx, 'nameko_proxy'):
+                ctx.nameko_proxy = ClusterRpcProxy(
+                    self.config,
+                    context_data=self.context_data,
+                    timeout=self.config.get('RPC_TIMEOUT', None),
+                    worker_ctx_cls=self.worker_cls,
+                )
+        return ctx.nameko_proxy
 
     def _teardown_nameko_connection(self, _):
         self.disconnect()
 
-    def __del__(self):
-        self.disconnect()
-
-    def disconnect(self):
-        if self.get_proxy():
+    @staticmethod
+    def disconnect():
+        ctx = stack.top
+        if hasattr(ctx, 'nameko_proxy'):
             logger.info("Nameko rpc proxy disconnecting...")
-            self.get_proxy().stop()
+            ctx.nameko_proxy.stop()

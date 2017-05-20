@@ -1,5 +1,6 @@
 from logging import getLogger
 
+import eventlet
 from kombu import Connection
 from kombu.messaging import Consumer
 from kombu.mixins import ConsumerMixin
@@ -15,8 +16,7 @@ class QueueConsumer(ConsumerMixin):
     PREFETCH_COUNT_CONFIG_KEY = 'PREFETCH_COUNT'
     DEFAULT_KOMBU_PREFETCH_COUNT = 10
 
-    def __init__(self, spawn_cls, timeout=None):
-        self.spawn_cls = spawn_cls
+    def __init__(self, timeout=None):
         self.timeout = timeout
         self.replies = {}
         self._managed_threads = []
@@ -35,7 +35,7 @@ class QueueConsumer(ConsumerMixin):
         return self._connection
 
     def register_provider(self, provider):
-        logger.debug("QueueConsumer registering...")
+        logger.debug("QueueConsumer registering: %s", provider)
         self.provider = provider
         self.queue = provider.queue
         self.serializer = provider.container.config.get(SERIALIZER_CONFIG_KEY, DEFAULT_SERIALIZER)
@@ -49,7 +49,7 @@ class QueueConsumer(ConsumerMixin):
 
     def start(self):
         logger.info("QueueConsumer starting...")
-        gt = self.spawn_cls(self.run)
+        gt = eventlet.spawn(self.run)
         self._managed_threads.append(gt)
         gt.link(self._handle_thread_exited)
 
@@ -69,7 +69,8 @@ class QueueConsumer(ConsumerMixin):
         self.replies[correlation_id] = (body, message)
 
     def unregister_provider(self, _):
-        self.connection.close()
+        if self._connection:
+            self.connection.close()
         self.should_stop = True
 
     def get_consumers(self, _, channel):
