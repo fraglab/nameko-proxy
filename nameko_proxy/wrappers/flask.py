@@ -10,11 +10,11 @@ logger = getLogger()
 
 class FlaskNamekoProxy:
 
-    def __init__(self, app=None):
-        self.worker_cls = None
-        self.context_data = None
-        self.config = None
+    worker_cls = None
+    context_data = None
+    config = None
 
+    def __init__(self, app=None):
         if app:
             self.init_app(app)
 
@@ -24,6 +24,16 @@ class FlaskNamekoProxy:
         self.config = {key[len('NAMEKO_'):]: val for key, val in app.config.items() if key.startswith('NAMEKO_')}
 
         app.teardown_appcontext(self._teardown_nameko_connection)
+
+    def _teardown_nameko_connection(self, _):
+        self.disconnect()
+
+    @staticmethod
+    def disconnect():
+        ctx = stack.top
+        if hasattr(ctx, 'nameko_proxy'):
+            logger.info("Nameko rpc proxy disconnecting...")
+            ctx.nameko_proxy.stop()
 
     def __getattr__(self, name):
         return getattr(self.connection, name)
@@ -48,13 +58,3 @@ class FlaskNamekoProxy:
                     worker_ctx_cls=self.worker_cls,
                 )
         return ctx.nameko_proxy
-
-    def _teardown_nameko_connection(self, _):
-        self.disconnect()
-
-    @staticmethod
-    def disconnect():
-        ctx = stack.top
-        if hasattr(ctx, 'nameko_proxy'):
-            logger.info("Nameko rpc proxy disconnecting...")
-            ctx.nameko_proxy.stop()
