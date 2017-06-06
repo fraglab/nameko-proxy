@@ -1,3 +1,4 @@
-from nameko_proxy.rpc_proxy import ClusterRpcProxy
+from nameko_proxy.proxy import *
+from nameko_proxy.reply_listener import *
 
-__version__ = '0.0.1'
+__version__ = '0.0.2'

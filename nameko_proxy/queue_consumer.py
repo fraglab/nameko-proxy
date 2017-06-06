@@ -1,6 +1,7 @@
 from logging import getLogger
 
 import eventlet
+from eventlet import event
 from kombu import Connection
 from kombu.messaging import Consumer
 from kombu.mixins import ConsumerMixin
@@ -18,21 +19,28 @@ class QueueConsumer(ConsumerMixin):
 
     def __init__(self, timeout=None):
         self.timeout = timeout
-        self.replies = {}
-        self._managed_threads = []
 
+        self.replies = {}
         self.provider = None
         self.queue = None
         self.prefetch_count = None
         self.serializer = None
         self.accept = []
+
+        self._managed_threads = []
+        self._consumers_ready = event.Event()
         self._connection = None
+
+    @property
+    def amqp_uri(self):
+        return self.provider.container.config[AMQP_URI_CONFIG_KEY]
 
     @property
     def connection(self):
         if not self._connection:
-            self._connection = Connection(self.provider.container.config[AMQP_URI_CONFIG_KEY])
+            self._connection = Connection(self.amqp_uri)
         return self._connection
+        # return Connection(self.amqp_uri)
 
     def register_provider(self, provider):
         logger.debug("QueueConsumer registering: %s", provider)
@@ -53,12 +61,26 @@ class QueueConsumer(ConsumerMixin):
         self._managed_threads.append(gt)
         gt.link(self._handle_thread_exited)
 
+        self._consumers_ready.wait()
+
     def _handle_thread_exited(self, gt):
         self._managed_threads.remove(gt)
         try:
             gt.wait()
         except Exception as error:
             logger.error("Managed thread end with error: %s", error)
+
+            if not self._consumers_ready.ready():
+                self._consumers_ready.send_exception(error)
+
+    def on_consume_ready(self, connection, channel, consumers, **kwargs):
+        if not self._consumers_ready.ready():
+            self._consumers_ready.send(None)
+
+    def on_connection_error(self, exc, interval):
+        logger.warning(
+            "Error connecting to broker at {} ({}).\n"
+            "Retrying in {} seconds.".format(self.amqp_uri, exc, interval))
 
     def on_message(self, body, message):
         correlation_id = message.properties.get('correlation_id')
