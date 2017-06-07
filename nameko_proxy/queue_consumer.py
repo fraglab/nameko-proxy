@@ -40,7 +40,6 @@ class QueueConsumer(ConsumerMixin):
         if not self._connection:
             self._connection = Connection(self.amqp_uri)
         return self._connection
-        # return Connection(self.amqp_uri)
 
     def register_provider(self, provider):
         logger.debug("QueueConsumer registering: %s", provider)
