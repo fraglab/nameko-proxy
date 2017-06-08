@@ -6,6 +6,11 @@ and asynchronous queue consumer to support multi threading.
 
 # Installation
 
+Install
+```bash
+pip3 install nameko-proxy
+```
+
 Install latest version from Git:
 ```bash
 pip install git+https://github.com/fraglab/nameko-proxy.git
