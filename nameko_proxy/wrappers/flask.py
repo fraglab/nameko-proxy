@@ -1,10 +1,26 @@
 from logging import getLogger
 
-from flask import _app_ctx_stack as stack
+from flask import current_app
 
 from nameko_proxy import StandaloneRpcProxy
 
 logger = getLogger()
+
+EXTENSION_NAME = 'nameko_proxy'
+
+
+class _NamekoProxyState:
+
+    def __init__(self, proxy):
+        self.proxy = proxy
+        self.connection = None
+
+
+def get_state(app) -> _NamekoProxyState:
+    assert EXTENSION_NAME in app.extensions, \
+        'The nameko_proxy extension was not registered to the current ' \
+        'application. Please make sure to call init_app() first.'
+    return app.extensions[EXTENSION_NAME]
 
 
 class FlaskNamekoProxy:
@@ -21,43 +37,33 @@ class FlaskNamekoProxy:
         self.context_data = context_data
         self.config = {key[len('NAMEKO_'):]: val for key, val in app.config.items() if key.startswith('NAMEKO_')}
 
-        app.teardown_appcontext(self._teardown_nameko_connection)
-
-    def _teardown_nameko_connection(self, _):
-        self.disconnect()
-
-    @staticmethod
-    def disconnect():
-        ctx = stack.top
-        if hasattr(ctx, 'nameko_proxy'):
-            logger.info("Nameko rpc proxy disconnecting...")
-            ctx.nameko_proxy.stop()
+        app.extensions[EXTENSION_NAME] = _NamekoProxyState(self.get_proxy())
 
     def register_context_hook(self, func: callable):
         self.context_data_hooks.append(func)
 
     def __getattr__(self, name):
-        return getattr(self.connection, name)
+        if name not in vars(FlaskNamekoProxy):
+            return getattr(self.connection, name)
+        return getattr(self, name)
 
     @property
     def connection(self):
-        ctx = stack.top
-        if ctx is not None:
-            if not hasattr(ctx, 'nameko_connection'):
-                ctx.nameko_connection = self.proxy.start()
-        return ctx.nameko_connection
+        state = get_state(current_app)
 
-    @property
-    def proxy(self):
-        ctx = stack.top
-        if ctx is not None:
-            if not hasattr(ctx, 'nameko_proxy'):
-                nameko_proxy = StandaloneRpcProxy(
-                    self.config,
-                    context_data=self.context_data,
-                    timeout=self.config.get('RPC_TIMEOUT', None),
-                )
-                for hook in self.context_data_hooks:
-                    nameko_proxy.register_context_hook(hook)
-                ctx.nameko_proxy = nameko_proxy
-        return ctx.nameko_proxy
+        if state.connection is None:
+            state.connection = state.proxy.start()
+
+        return state.connection
+
+    def get_proxy(self):
+        nameko_proxy = StandaloneRpcProxy(
+            self.config,
+            context_data=self.context_data,
+            timeout=self.config.get('RPC_TIMEOUT', None),
+        )
+
+        for hook in self.context_data_hooks:
+            nameko_proxy.register_context_hook(hook)
+
+        return nameko_proxy
