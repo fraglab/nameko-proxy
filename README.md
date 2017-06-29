@@ -53,8 +53,11 @@ Wrapper get from flask config all parameters started from prefix "NAMEKO_" and p
 
 ```python
 from eventlet import monkey_patch
-from flask import Flask, g
+from flask import Flask
 from nameko_proxy.wrappers.flask import FlaskNamekoProxy
+
+
+rpc = FlaskNamekoProxy()
 
 
 def make_app(conf_path: str='settings.py') -> Flask:
@@ -65,11 +68,10 @@ def make_app(conf_path: str='settings.py') -> Flask:
     
 def start_app():
     app = make_app()
-
+    rpc.init_app(app)
+    
     monkey_patch()
-    with app.app_context():
-        g.rpc = FlaskNamekoProxy(app)
-        app.run()
+    app.run()
 
 if __name__ == '__main__':
     start_app()
