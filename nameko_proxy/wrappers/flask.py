@@ -23,6 +23,18 @@ def get_state(app) -> _NamekoProxyState:
     return app.extensions[EXTENSION_NAME]
 
 
+class Config(dict):
+    @classmethod
+    def from_flask_config(cls, config):
+        return cls({key[len('NAMEKO_'):]: val for key, val in config.items() if key.startswith('NAMEKO_')})
+
+    def __getitem__(self, item):
+        return super().__getitem__(item.upper())
+
+    def get(self, k, default):
+        return super().get(k.upper(), default)
+
+
 class FlaskNamekoProxy:
 
     context_data = None
@@ -35,7 +47,7 @@ class FlaskNamekoProxy:
 
     def init_app(self, app, context_data=None):
         self.context_data = context_data
-        self.config = {key[len('NAMEKO_'):]: val for key, val in app.config.items() if key.startswith('NAMEKO_')}
+        self.config = Config.from_flask_config(app.config)
 
         app.extensions[EXTENSION_NAME] = _NamekoProxyState(self.get_proxy())
 
