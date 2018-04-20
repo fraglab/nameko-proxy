@@ -20,7 +20,6 @@ class QueueConsumer(ConsumerMixin):
     def __init__(self, timeout=None):
         self.timeout = timeout
 
-        self.replies = {}
         self.provider = None
         self.queue = None
         self.prefetch_count = None
@@ -81,14 +80,6 @@ class QueueConsumer(ConsumerMixin):
             "Error connecting to broker at {} ({}).\n"
             "Retrying in {} seconds.".format(self.amqp_uri, exc, interval))
 
-    def on_message(self, body, message):
-        correlation_id = message.properties.get('correlation_id')
-        if correlation_id not in self.provider._reply_events:
-            logger.debug(
-                "Unknown correlation id: %s", correlation_id)
-
-        self.replies[correlation_id] = (body, message)
-
     def unregister_provider(self, _):
         if self._connection:
             self.connection.close()
@@ -96,7 +87,7 @@ class QueueConsumer(ConsumerMixin):
 
     def get_consumers(self, _, channel):
         consumer = Consumer(channel, queues=[self.provider.queue], accept=self.accept,
-                            no_ack=False, callbacks=[self.on_message, self.provider.handle_message])
+                            no_ack=False, callbacks=[self.provider.handle_message])
         consumer.qos(prefetch_count=self.prefetch_count)
         return [consumer]
 
