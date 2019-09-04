@@ -1,11 +1,9 @@
 from setuptools import setup, find_packages
 
-from nameko_proxy import __version__
-
 
 setup(
     name='nameko-proxy',
-    version=__version__,
+    version='0.0.5',
     author='Sergey Suglobov',
     author_email='s.suglobov@gmail.com',
     packages=find_packages(),
