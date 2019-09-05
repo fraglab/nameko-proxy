@@ -2,15 +2,16 @@ from logging import getLogger
 
 import eventlet
 from eventlet import event
-from threading import Event
 import threading
 from nameko_proxy.event_queue import EventQueue
 from kombu import Connection
 from kombu.messaging import Consumer
 from kombu.mixins import ConsumerMixin
-#from nameko.amqp import verify_amqp_uri
 from nameko.constants import (
-    AMQP_URI_CONFIG_KEY, DEFAULT_SERIALIZER, SERIALIZER_CONFIG_KEY)
+    AMQP_URI_CONFIG_KEY, DEFAULT_SERIALIZER, SERIALIZER_CONFIG_KEY,
+    HEARTBEAT_CONFIG_KEY, DEFAULT_HEARTBEAT, TRANSPORT_OPTIONS_CONFIG_KEY,
+    DEFAULT_TRANSPORT_OPTIONS, AMQP_SSL_CONFIG_KEY
+)
 
 logger = getLogger()
 
@@ -41,7 +42,18 @@ class QueueConsumer(ConsumerMixin):
     @property
     def connection(self):
         if not self._connection:
-            self._connection = Connection(self.amqp_uri, heartbeat=20)
+            heartbeat = self.provider.container.config.get(
+                HEARTBEAT_CONFIG_KEY, DEFAULT_HEARTBEAT
+            )
+            transport_options = self.provider.container.config.get(
+                TRANSPORT_OPTIONS_CONFIG_KEY, DEFAULT_TRANSPORT_OPTIONS
+            )
+            ssl = self.provider.container.config.get(AMQP_SSL_CONFIG_KEY)
+            self._connection = Connection(self.amqp_uri,
+                                          transport_options=transport_options,
+                                          heartbeat=heartbeat,
+                                          ssl=ssl
+                                         )
         return self._connection
 
     def register_provider(self, provider):
@@ -53,30 +65,18 @@ class QueueConsumer(ConsumerMixin):
             self.PREFETCH_COUNT_CONFIG_KEY, self.DEFAULT_KOMBU_PREFETCH_COUNT)
         self.accept = [self.serializer]
 
-#        verify_amqp_uri(provider.container.config[AMQP_URI_CONFIG_KEY])
-
         self.start()
 
     def start(self):
-#        logger.info("QueueConsumer starting...")
-#        gt = eventlet.spawn(self.run)
-#        self._managed_threads.append(gt)
-#        gt.link(self._handle_thread_exited)
-#        self._consumers_ready.wait()
-        def func():
-            logger.info("QueueConsumer starting...")
-            self.run()
-            self._handle_thread_exited()
-
-        self._thread = threading.Thread(target=func)
+        self._thread = threading.Thread(target=self._handle_thread)
         self._thread.daemon = True
         self._thread.start()
         self._consumers_ready.wait()
 
-    def _handle_thread_exited(self, gt=None):
-#        self._managed_threads.remove(gt)
+    def _handle_thread(self):
+        logger.info("QueueConsumer starting...")
         try:
-            self._thread.join()
+            self.run()
         except Exception as error:
             logger.error("Managed thread end with error: %s", error)
 
