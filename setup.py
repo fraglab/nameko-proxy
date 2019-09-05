@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='nameko-proxy',
-    version='0.0.5',
+    version='0.0.6',
     author='Sergey Suglobov',
     author_email='s.suglobov@gmail.com',
     packages=find_packages(),
