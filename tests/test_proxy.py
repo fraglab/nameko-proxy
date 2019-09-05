@@ -12,9 +12,8 @@ CONFIG = {
 
 
 @deserialize_to_instance
-class TestError(Exception):
-    def __init__(self, msg):
-        self.msg = msg
+class FooTestError(Exception):
+    pass
 
 
 class FooService(object):
@@ -26,7 +25,7 @@ class FooService(object):
 
     @rpc
     def error(self, msg):
-        raise TestError(msg)
+        raise FooTestError(msg)
 
     @rpc
     def sleep(self, seconds=0):
@@ -44,7 +43,7 @@ def test_rpc_proxy():
         msg = "Error occurred"
         try:
             proxy.foo_service.error(msg)
-        except TestError as error:
+        except FooTestError as error:
             assert str(error) == msg
 
 
