@@ -52,29 +52,25 @@ Wrapper get from flask config all parameters started from prefix "NAMEKO_" and p
 ### Example
 
 ```python
-from eventlet import monkey_patch
 from flask import Flask
-from nameko_proxy.wrappers.flask import FlaskNamekoProxy
+from nameko_proxy.wrappers.flask_wrapper import FlaskNamekoProxy
 
 
 rpc = FlaskNamekoProxy()
 
 
-def make_app(conf_path: str='settings.py') -> Flask:
+def make_app():
     app = Flask(__name__)
-    app.config.from_pyfile(conf_path)
-    return app
-    
-    
-def start_app():
-    app = make_app()
+    app.config.update(dict(
+        NAMEKO_AMQP_URI='pyamqp://guest:guest@localhost'
+    ))
     rpc.init_app(app)
-    
-    monkey_patch()
-    app.run()
+    return app
+
+app = make_app()
 
 if __name__ == '__main__':
-    start_app()
+    app.run()
 ```
 
 
@@ -85,7 +81,7 @@ It useful if you want for example add to each request unique request_id for bett
 
 ```python
 from flask import Flask, request
-from nameko_proxy.wrappers.flask import FlaskNamekoProxy
+from nameko_proxy.wrappers.flask_wrapper import FlaskNamekoProxy
 from nameko.constants import CALL_ID_STACK_CONTEXT_KEY
 
 app = Flask(__name__)

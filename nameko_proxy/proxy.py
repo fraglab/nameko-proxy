@@ -11,7 +11,7 @@ __all__ = ['StandaloneRpcProxy']
 logger = getLogger()
 
 
-class _StandaloneProxyBase:
+class _StandaloneProxyBase(object):
 
     ServiceContainer = StandaloneProxyBase.ServiceContainer
     Dummy = StandaloneProxyBase.Dummy
@@ -28,7 +28,7 @@ class _StandaloneProxyBase:
         self._reply_listener = reply_listener_cls(
             timeout=timeout).bind(self.container)
 
-    def register_context_hook(self, func: callable):
+    def register_context_hook(self, func):
         self.context_data_hooks.append(func)
 
     def __enter__(self):
@@ -46,7 +46,7 @@ class _StandaloneProxyBase:
 
 
 class _ClusterProxy:
-    def __init__(self, container, entrypoint, reply_listener, context_callback: callable):
+    def __init__(self, container, entrypoint, reply_listener, context_callback):
         self._container = container
         self._entrypoint = entrypoint
         self._reply_listener = reply_listener
@@ -68,9 +68,10 @@ class StandaloneRpcProxy(_StandaloneProxyBase):
         self._proxy = _ClusterProxy(
             self.container, self.Dummy, self._reply_listener, context_callback=self.get_context_data)
 
-    def get_context_data(self) -> dict:
+    def get_context_data(self):
         if self.context_data or self.context_data_hooks:
             context_data = self.context_data.copy() if self.context_data else {}
             for hook in self.context_data_hooks:
                 context_data.update(hook())
             return context_data
+

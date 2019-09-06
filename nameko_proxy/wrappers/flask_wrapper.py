@@ -4,6 +4,8 @@ from flask import current_app
 
 from nameko_proxy import StandaloneRpcProxy
 
+import atexit
+
 logger = getLogger()
 
 EXTENSION_NAME = 'nameko_proxy'
@@ -16,7 +18,7 @@ class _NamekoProxyState:
         self.connection = None
 
 
-def get_state(app) -> _NamekoProxyState:
+def get_state(app):
     assert EXTENSION_NAME in app.extensions, \
         'The nameko_proxy extension was not registered to the current ' \
         'application. Please make sure to call init_app() first.'
@@ -29,10 +31,10 @@ class Config(dict):
         return cls({key[len('NAMEKO_'):]: val for key, val in config.items() if key.startswith('NAMEKO_')})
 
     def __getitem__(self, item):
-        return super().__getitem__(item.upper())
+        return super(Config, self).__getitem__(item.upper())
 
-    def get(self, k, default):
-        return super().get(k.upper(), default)
+    def get(self, k, default=None):
+        return super(Config, self).get(k.upper(), default)
 
 
 class FlaskNamekoProxy:
@@ -51,7 +53,7 @@ class FlaskNamekoProxy:
 
         app.extensions[EXTENSION_NAME] = _NamekoProxyState(self.get_proxy())
 
-    def register_context_hook(self, func: callable):
+    def register_context_hook(self, func):
         self.context_data_hooks.append(func)
 
     def __getattr__(self, name):
@@ -65,6 +67,7 @@ class FlaskNamekoProxy:
 
         if state.connection is None:
             state.connection = state.proxy.start()
+            atexit.register(state.proxy.stop)
 
         return state.connection
 

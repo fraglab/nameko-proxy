@@ -1,6 +1,7 @@
-import eventlet
+import time
+import pytest
 from nameko.rpc import rpc
-from nameko.exceptions import deserialize_to_instance
+from nameko.exceptions import deserialize_to_instance, RpcTimeout
 from nameko.containers import ServiceContainer
 
 from nameko_proxy import StandaloneRpcProxy
@@ -12,9 +13,8 @@ CONFIG = {
 
 
 @deserialize_to_instance
-class TestError(Exception):
-    def __init__(self, msg):
-        self.msg = msg
+class FooTestError(Exception):
+    pass
 
 
 class FooService(object):
@@ -26,11 +26,11 @@ class FooService(object):
 
     @rpc
     def error(self, msg):
-        raise TestError(msg)
+        raise FooTestError(msg)
 
     @rpc
     def sleep(self, seconds=0):
-        eventlet.sleep(seconds)
+        time.sleep(seconds)
         return seconds
 
 
@@ -44,7 +44,7 @@ def test_rpc_proxy():
         msg = "Error occurred"
         try:
             proxy.foo_service.error(msg)
-        except TestError as error:
+        except FooTestError as error:
             assert str(error) == msg
 
 
@@ -63,3 +63,14 @@ def test_async_calls():
         assert resp1.result() == 1
         assert resp4.result() == 4
         assert resp5.result() == 5
+
+
+def test_rpc_timeout():
+    container = ServiceContainer(FooService, CONFIG)
+    container.start()
+
+    with StandaloneRpcProxy(CONFIG, timeout=.5) as proxy:
+        with pytest.raises(RpcTimeout):
+            assert proxy.foo_service.sleep(1)
+
+        assert proxy.foo_service.sleep(0) == 0
